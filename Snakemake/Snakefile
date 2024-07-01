@@ -428,11 +428,5 @@ rule minimap2_ont:
 #         bowtie2 --no-mixed --threads {threads} -x {input.ref} -U {output.SCLEN20_RLEN20_fastq_gz} | samtools sort -@{threads} - -o {output.SCLEN20_RLEN20_softclips_bowtie2_bam}
 #         samtools index -@{threads} {output.SCLEN20_RLEN20_softclips_bowtie2_bam}
 #         samtools depth -a -o {output.SCLEN20_RLEN20_softclips_coverage_txt} {output.SCLEN20_RLEN20_softclips_bowtie2_bam}
-        
-#         # TODO add bedtools intersect to remove small repeats
-#         # samtools view {output.SCLEN20_RLEN20_softclips_bowtie2_bam} | cut -f1 | sort | uniq > {output.readnames_file}
-#         # samtools view -Sbh -N {output.readnames_file} -o {output.filtered_reads_bam} {output.SCLEN20_RLEN20_bam} 
-#         # samtools index -@{threads} {output.filtered_reads_bam}
-#         # samtools depth -a -o {output.filtered_reads_coverage_txt} {output.filtered_reads_bam}
 #         """
 
