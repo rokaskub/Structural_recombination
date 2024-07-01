@@ -1,0 +1,3 @@
+﻿seqname,source,feature,start,end,score,strand,frame,GBKEY,Note,Number,Type,genomic.window.start,genomic.window.end,genomic_R1_site_start,genomic_R1_site_end,genomic_R2_site_start,genomic_R2_site_end,window.start,window.end,R1_site_start,R1_site_end,R2_site_start,R2_site_end
+NC_037304.1,RefSeq,repeat_region,263897,264071,.,+,.,repeat_region,Y,2,SSA,263179,264789,263179,263897,264071,264789,5051,6661,5051,5769,5943,6661
+NC_037304.1,RefSeq,repeat_region,265507,265681,.,+,.,repeat_region,Y,3,SSA,264789,266399,264789,265507,265681,266399,6661,8271,6661,7379,7553,8271

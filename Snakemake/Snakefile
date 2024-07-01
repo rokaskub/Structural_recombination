@@ -1,0 +1,438 @@
+import os
+import glob
+from pathlib import Path
+
+# 1. INDIVIDUAL ANALYSIS
+RAW_DATA    = Path("../0_RawData") # Folder with all the fastq.gz
+MAPPING_DIR = Path("../1_Mapping_bwa_full") # Mapping output dir
+
+FILES = glob_wildcards(RAW_DATA / "{sample,[^/]+}.{pair}.fastq.gz")
+
+# Col-0 only (for testing)
+#FILES = glob_wildcards(RAW_DATA / "{sample,[^/]*Col-0[^/]*}.{pair}.fastq.gz") # Col0 only
+
+# 2. ANALYSIS BY GENOTYPE (samples fastqs were merged together by genotype)
+#RAW_DATA    = Path("../byGenotype")
+#MAPPING_DIR = Path("../byGenotype/1_Mapping_bwa_full")
+#FILES = glob_wildcards("../byGenotype/{sample,[^/]+}.{pair}.fastq.gz") # this avoid to check every subdir -> ,[^/]+
+
+NUCL           = "../ReferenceMaterials/TAIR10_Chr.all.fasta"
+CHLORO         = "../ReferenceMaterials/ChrC.NC_000932.1.fa"
+MITO           = "../ReferenceMaterials/ChrM.NC_037304.1.fa"
+YREPEATS       = "../ReferenceMaterials/Mt.258128_270303.fasta"
+REPEATS_R1_GTF = "../ReferenceMaterials/all_repeats_general_annotation_frag_size_R1.gtf"
+REPEATS_R2_GTF = "../ReferenceMaterials/all_repeats_general_annotation_frag_size_R2.gtf"
+SMALL_REPEATS_TO_REMOVE = "../ReferenceMaterials/small_repeats_to_remove.bed"
+
+# EXTERNAL SOFTS, PUT LINK OF BINARY HERE
+SE_MEI         = "~/Softs/SE-MEI/extractSoftclipped" # https://github.com/dpryan79/SE-MEI
+FEATURE_COUNTS = "~/Softs/mambaforge/bin/featureCounts" # https://subread.sourceforge.net/ 
+BAM_COVERAGE   = "~/Softs/mambaforge/bin/bamCoverage" # https://deeptools.readthedocs.io/en/develop/content/tools/bamCoverage.html
+
+# REF GENOMES
+REF = {"ChrM": MITO, 
+       "ChrM_258128_270303": YREPEATS}
+
+# BWA OPTIONS
+BWA_OPTS = {"bwa_strict": "-Y -B 40 -O 60 -E 10 -L100", 
+            "bwa_normal": "-Y"}
+
+print(REF)
+print(BWA_OPTS)
+print(FILES)
+
+# TO ALIGN only TAL_UP & TAL_6-2 on nucleus TAIR10 with bowtie2
+#MERGED_SAMPLES, = glob_wildcards(MAPPING_DIR / "unspecific_target" / "{merged_sample}.R1.fastq.gz")
+#print(MERGED_SAMPLES)
+
+# Checking nanopore test run
+NANOPORE_DIR = Path("../Nanopore")
+NANOPORE_FASTQ = "../Nanopore/nanopore.fq.gz"
+
+# CONSTRUCTS FASTAs
+CONSTRUCTS = {"OSB1": "../ReferenceMaterials/Construct/OSB1.fasta",
+             "TAL-1": "../ReferenceMaterials/Construct/TAL-1.fasta",
+             "TAL-2": "../ReferenceMaterials/Construct/TAL-2.fasta",
+             "OSB4":  "../ReferenceMaterials/Construct/OSB4.fasta"}
+
+rule all:
+    input: 
+        #nucl_bam = expand(MAPPING_DIR / "unspecific_target" / "{merged_sample}.TAIR10_nucl.bam", merged_sample=MERGED_SAMPLES),
+        #softclip_bam = expand(MAPPING_DIR / "{mapping}" / "softclip" / "{sample}.{ref_genome}.MD.softclip_overhangs.NM2_SCLEN0.bam", sample=set(FILES.sample), ref_genome = REF.keys(), mapping = BWA_OPTS.keys()),
+        mito_bam                    = expand(MAPPING_DIR / "{mapping}" / "{sample}.{ref_genome}.bam", sample=set(FILES.sample), ref_genome = REF.keys(), mapping = BWA_OPTS.keys()),
+        unmapped                    = expand(MAPPING_DIR / "{mapping}" / "{sample}.{ref_genome}.unmapped.R2.fastq.gz", sample=set(FILES.sample), ref_genome = REF.keys(), mapping = BWA_OPTS.keys()),
+        leftovers                   = expand(MAPPING_DIR / "{mapping}" / "{sample}.{ref_genome}.TAIR10.bam.coverage.txt", sample=set(FILES.sample), ref_genome = REF.keys(), mapping = BWA_OPTS.keys()),
+        #deeptools                   = expand(MAPPING_DIR / "{mapping}" / "{sample}.{ref_genome}.MD.bam.deeptools.100bp_bins.cpm.txt", sample=set(FILES.sample), ref_genome = REF.keys(), mapping = BWA_OPTS.keys()),
+        #deeptools                   = expand(MAPPING_DIR / "{mapping}" / "insert_size" / "{sample}.{ref_genome}.MD.IS1000.filtered.bam.deeptools.1bp_bins.cpm.txt", sample=set(FILES.sample), ref_genome = REF.keys(), mapping = BWA_OPTS.keys()),
+        #filtered_bam_sup1000        = expand(MAPPING_DIR / "{mapping}" / "insert_size" / "{sample}.{ref_genome}.MD.IS1000.filtered.bam", sample=set(FILES.sample), ref_genome = REF.keys(), mapping = BWA_OPTS.keys()),
+        #filtered_bam_inf1000        = expand(MAPPING_DIR / "{mapping}" / "insert_size_below_1000" / "{sample}.{ref_genome}.MD.IS1000.filtered.bam", sample=set(FILES.sample), ref_genome = REF.keys(), mapping = BWA_OPTS.keys()),
+        #bam_nosoftclip              = expand(MAPPING_DIR / "{mapping}" / "{sample}.{ref_genome}.MD.withoutSoftClip.bam", sample=set(FILES.sample), ref_genome = REF.keys(), mapping = BWA_OPTS.keys()),
+        #featureCounts_R1            = expand(MAPPING_DIR / "{mapping}" / "insert_size" / "{sample}.{ref_genome}.MD.IS1000.filtered.R1.featureCounts.txt", sample=set(FILES.sample), ref_genome = REF.keys(), mapping = BWA_OPTS.keys()),
+        #featureCounts_R2            = expand(MAPPING_DIR / "{mapping}" / "insert_size" / "{sample}.{ref_genome}.MD.IS1000.filtered.R2.featureCounts.txt", sample=set(FILES.sample), ref_genome = REF.keys(), mapping = BWA_OPTS.keys()),
+        #deeptools_sup               = expand(MAPPING_DIR / "{mapping}" / "insert_size" / "{sample}.{ref_genome}.MD.IS1000.filtered.bam.deeptools.100bp_bins.cpm.txt", sample=set(FILES.sample), ref_genome = REF.keys(), mapping = BWA_OPTS.keys()),
+        #deeptools_inf               = expand(MAPPING_DIR / "{mapping}" / "insert_size_below_1000" / "{sample}.{ref_genome}.MD.IS1000.filtered.bam.deeptools.100bp_bins.cpm.txt", sample=set(FILES.sample), ref_genome = REF.keys(), mapping = BWA_OPTS.keys()),
+        #microhomologies             = expand(MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.MD.MICROHOMO.bam", sample=set(FILES.sample), ref_genome = REF.keys(), mapping = BWA_OPTS.keys()),
+        #coverage_XA_SA              = expand(MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.MD.MICROHOMO.NM2_SCLEN20_XA_SA.bowtie2.bam.depth.txt", sample=set(FILES.sample), ref_genome = REF.keys(), mapping = BWA_OPTS.keys()),
+        #coverage                    = expand(MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.MD.MICROHOMO.NM2_SCLEN20.bowtie2.bam.depth.txt", sample=set(FILES.sample), ref_genome = REF.keys(), mapping = BWA_OPTS.keys()),
+        #SCLEN20_RLEN20_fastq_gz     = expand(MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.SCLEN20.RLEN20.fastq.gz", sample=set(FILES.sample), ref_genome = REF.keys(), mapping = BWA_OPTS.keys()),
+        #filtered_reads_bam          = expand(MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.SCLEN20.RLEN20.full_filtered_reads.bam", sample=set(FILES.sample), ref_genome = REF.keys(), mapping = BWA_OPTS.keys()),
+        #filtered_reads_coverage_txt = expand(MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.SCLEN20.RLEN20.full_filtered_reads.coverage.txt", sample=set(FILES.sample), ref_genome = REF.keys(), mapping = BWA_OPTS.keys()),
+        #tair10_bam                  = expand(MAPPING_DIR / "bwa_TAIR10" / "{sample}.TAIR10.bam", sample=set(FILES.sample)),
+        #nanopore_bam = expand(NANOPORE_DIR / "minimap2" / "nanopore.{construct}.minimap2.bam", construct=CONSTRUCTS.keys())
+
+# Mapping reads on tair10 full genome
+rule bwa_nucl:
+    input:
+        r1 = RAW_DATA / "{sample}.R1.fastq.gz",
+        r2 = RAW_DATA / "{sample}.R2.fastq.gz",
+        ref = NUCL
+    output:
+        bam = MAPPING_DIR / "bwa_TAIR10" / "{sample}.TAIR10.bam",
+        bam_cov = MAPPING_DIR / "bwa_TAIR10" / "{sample}.TAIR10.bam.coverage.txt"
+    params:
+        bwa_opts = "-Y"
+    threads: 4
+    shell:
+        """
+        module load samtools bwa
+        bwa mem {params.bwa_opts} -t {threads} {input.ref} {input.r1} {input.r2} | samtools sort -@ {threads} -o {output.bam} -
+        samtools coverage -o {output.bam_cov} {output.bam}
+        """
+
+# Mapping reads on chloro only
+rule bwa_chloro:
+    input:
+        r1 = RAW_DATA / "{sample}.R1.fastq.gz",
+        r2 = RAW_DATA / "{sample}.R2.fastq.gz",
+        ref = CHLORO
+    output:
+        bam = MAPPING_DIR / "{sample}.ChrC.bam",
+        unR1 = MAPPING_DIR / "{sample}.R1.fastq.gz",
+        unR2 = MAPPING_DIR / "{sample}.R2.fastq.gz"
+    params:
+        bwa_opts = "-Y",
+        samtools_fastq_opts = "-c 1 -f 4" # -c 1 = .gz file with max speed compression
+    threads: 4
+    shell:
+        """
+        module load samtools bwa
+        bwa mem {params.bwa_opts} -t {threads} {input.ref} {input.r1} {input.r2} | samtools view -@ {threads} -o {output.bam} -
+        samtools fastq -@{threads} {params.samtools_fastq_opts} -1 {output.unR1} -2 {output.unR2} -0 /dev/null -s /dev/null {output.bam}  
+        """
+
+# Mapping chloro unmapped reads on mito
+rule bwa_mito:
+    input:
+        r1 = rules.bwa_chloro.output.unR1,
+        r2 = rules.bwa_chloro.output.unR2,
+        ref = MITO
+    output:
+        bam = MAPPING_DIR / "{mapping}" / "{sample}.{ref_genome}.bam",
+        md_bam = MAPPING_DIR / "{mapping}" / "{sample}.{ref_genome}.MD.bam",
+        md_bam_depth = MAPPING_DIR / "{mapping}" / "{sample}.{ref_genome}.MD.bam.depth.txt",
+        md_bam_metric = MAPPING_DIR / "{mapping}" / "{sample}.{ref_genome}.MD.bam.metrics.txt",
+        md_bam_coverage = MAPPING_DIR / "{mapping}" / "{sample}.{ref_genome}.MD.bam.coverage.txt"
+    params:
+        id = lambda wc: wc.sample.split("_")[:-1],
+        bwa_opts = lambda wc: BWA_OPTS[wc.mapping]
+    threads: 8
+    shell:
+        """
+        module load gatk samtools bwa
+        bwa mem {params.bwa_opts} -t {threads} -R '@RG\\tID:{params.id}\\tSM:{wildcards.sample}\\tPL:ILLUMINA\\tLB:PE\\tPU:TAIR10.1_{wildcards.ref_genome}' {input.ref} {input.r1} {input.r2} | samtools sort -@ {threads} -o {output.bam} -
+        gatk MarkDuplicates --REMOVE_DUPLICATES true --INPUT {output.bam} --OUTPUT {output.md_bam} --METRICS_FILE {output.md_bam_metric} 
+        samtools index -@{threads} {output.md_bam}
+        samtools depth -a -o {output.md_bam_depth} {output.md_bam}
+        samtools coverage -o {output.md_bam_coverage} {output.md_bam} 
+        """
+
+# Extract unmapped from MITO
+rule unmapped_mito:
+    input:
+        bam = rules.bwa_mito.output.md_bam
+    output:
+        unR1 = MAPPING_DIR / "{mapping}" / "{sample}.{ref_genome}.unmapped.R1.fastq.gz",
+        unR2 = MAPPING_DIR / "{mapping}" / "{sample}.{ref_genome}.unmapped.R2.fastq.gz"
+    params:
+        samtools_fastq_opts = "-f 4" # -c 1 = .gz file with max speed compression
+    threads: 4
+    shell:
+        """
+        module load samtools 
+        samtools fastq -@{threads} {params.samtools_fastq_opts} -1 {output.unR1} -2 {output.unR2} -0 /dev/null -s /dev/null {input.bam} 
+        """
+
+# Mapping unmapped to nucl
+# Steps: ChrC -> ChrM -> TAIR10 -> what is left == trully unmapped
+rule unmapped_nucl:
+    input:
+        r1 = rules.unmapped_mito.output.unR1,
+        r2 = rules.unmapped_mito.output.unR2,
+        ref = NUCL
+    output:
+        bam = MAPPING_DIR / "{mapping}" / "{sample}.{ref_genome}.TAIR10.bam",
+        bam_cov = MAPPING_DIR / "{mapping}" / "{sample}.{ref_genome}.TAIR10.bam.coverage.txt"
+    params:
+        bwa_opts = "-Y"
+    threads: 4
+    shell:
+        """
+        module load samtools bwa
+        bwa mem {params.bwa_opts} -t {threads} {input.ref} {input.r1} {input.r2} | samtools sort -@ {threads} -o {output.bam} -
+        samtools coverage -o {output.bam_cov} {output.bam}
+        """
+
+# For unspecific target analysis
+rule bowtie2_nucl:
+    input:
+        r1 = MAPPING_DIR / "unspecific_target" / "{merged_sample}.R1.fastq.gz",
+        r2 = MAPPING_DIR / "unspecific_target" / "{merged_sample}.R2.fastq.gz",
+        ref = NUCL
+    output:
+        bam = MAPPING_DIR / "unspecific_target" / "{merged_sample}.TAIR10_nucl.bam",
+        md_bam_depth = MAPPING_DIR / "unspecific_target" / "{merged_sample}.TAIR10_nucl.bam.depth.txt",
+        md_bam_coverage = MAPPING_DIR / "unspecific_target" / "{merged_sample}.TAIR10_nucl.bam.coverage.txt"
+    threads: 8
+    shell:
+        """
+        module load samtools bowtie2
+        bowtie2 --no-unal --threads {threads} -x {input.ref} -1 {input.r1} -2 {input.r2}  | samtools sort -@ {threads} - -o {output.bam} 
+        samtools index -@{threads} {output.bam}
+        samtools depth -a -o {output.md_bam_depth} {output.bam}
+        samtools coverage -o {output.md_bam_coverage} {output.bam} 
+        """
+
+rule deeptools:
+    input: 
+        bam = rules.bwa_mito.output.md_bam
+    output:
+        md_bam_deeptools_cpm = MAPPING_DIR / "{mapping}" / "{sample}.{ref_genome}.MD.bam.deeptools.100bp_bins.cpm.txt"
+    shell:
+        """
+        {BAM_COVERAGE} --bam {input.bam} -o {output.md_bam_deeptools_cpm} --binSize 100 --normalizeUsing CPM -of bedgraph
+        """
+
+# Check reads with insert size >= 1000bp
+rule insert_size_sup_1000: 
+    input: rules.bwa_mito.output.md_bam
+    output: 
+        bam = MAPPING_DIR / "{mapping}" / "insert_size" / "{sample}.{ref_genome}.MD.IS1000.bam",
+        tmp = temp(MAPPING_DIR / "{mapping}" / "insert_size" / "{sample}.{ref_genome}.reads_to_filter.tmp.txt"),
+        readnames_file = MAPPING_DIR / "{mapping}" / "insert_size" / "{sample}.{ref_genome}.reads_to_filter.txt",
+        filtered_bam = MAPPING_DIR / "{mapping}" / "insert_size" / "{sample}.{ref_genome}.MD.IS1000.filtered.bam",
+        filtered_bam_plus = MAPPING_DIR / "{mapping}" / "insert_size" / "{sample}.{ref_genome}.MD.IS1000.filtered.plus.bam",
+        filtered_bam_minus = MAPPING_DIR / "{mapping}" / "insert_size" / "{sample}.{ref_genome}.MD.IS1000.filtered.minus.bam",
+        depth = MAPPING_DIR  / "{mapping}" / "insert_size" / "{sample}.{ref_genome}.MD.IS1000.filtered.bam.depth.txt",
+        depth_plus = MAPPING_DIR  / "{mapping}" / "insert_size" / "{sample}.{ref_genome}.MD.IS1000.filtered.bam.depth.plus_strand.txt",
+        depth_minus = MAPPING_DIR  / "{mapping}" / "insert_size" / "{sample}.{ref_genome}.MD.IS1000.filtered.bam.depth.minus_strand.txt",
+        #deeptools_cov = MAPPING_DIR / "{mapping}" / "insert_size" / "{sample}.{ref_genome}.MD.IS1000.filtered.bam.deeptools.100bp_bins.cpm.txt"
+        deeptools_cov = MAPPING_DIR / "{mapping}" / "insert_size" / "{sample}.{ref_genome}.MD.IS1000.filtered.bam.deeptools.1bp_bins.cpm.txt"
+    threads: 4
+    shell:
+        """
+        module load samtools
+        samtools view -bh -e 'tlen <= -1000 || tlen >= 1000' -o {output.bam} {input}
+        samtools view -e '[XA] || [SA] || [NM]>1' {output.bam} | cut -f 1 > {output.tmp}
+        samtools view -e 'mapq<1' {output.bam} | cut -f 1 >> {output.tmp}
+        samtools view -e 'rlen<=75' {output.bam} | cut -f 1 >> {output.tmp}
+        sort {output.tmp} | uniq > {output.readnames_file}
+        samtools view -h {output.bam} | fgrep --invert-match -f {output.readnames_file} | samtools view -Sb -o {output.filtered_bam} - 
+        
+        samtools index -@{threads} {output.bam}
+        samtools index -@{threads} {output.filtered_bam}
+        samtools depth -a {output.filtered_bam} -o {output.depth}
+        
+        samtools view -h -F 16 {output.filtered_bam} -o {output.filtered_bam_plus}
+        samtools view -h -f 16 {output.filtered_bam} -o {output.filtered_bam_minus}
+        
+        samtools depth -a -o {output.depth_plus} {output.filtered_bam_plus}
+        samtools depth -a -o {output.depth_minus} {output.filtered_bam_minus}
+
+        {BAM_COVERAGE} --bam {output.filtered_bam} -o {output.deeptools_cov} --binSize 1 --normalizeUsing CPM -of bedgraph
+        """
+
+# Check reads with insert size <1000bp
+rule insert_size_below_1000: 
+    input: rules.bwa_mito.output.md_bam
+    output:
+        bam = MAPPING_DIR / "{mapping}" / "insert_size_below_1000" / "{sample}.{ref_genome}.MD.IS1000.bam",
+        tmp = MAPPING_DIR / "{mapping}" / "insert_size_below_1000" / "{sample}.{ref_genome}.reads_to_filter.tmp.txt",
+        readnames_file = MAPPING_DIR / "{mapping}" / "insert_size_below_1000" / "{sample}.{ref_genome}.reads_to_filter.txt",
+        filtered_bam = MAPPING_DIR / "{mapping}" / "insert_size_below_1000" / "{sample}.{ref_genome}.MD.IS1000.filtered.bam",
+        filtered_bam_plus = MAPPING_DIR / "{mapping}" / "insert_size_below_1000" / "{sample}.{ref_genome}.MD.IS1000.filtered.plus.bam",
+        filtered_bam_minus = MAPPING_DIR / "{mapping}" / "insert_size_below_1000" / "{sample}.{ref_genome}.MD.IS1000.filtered.minus.bam",
+        depth = MAPPING_DIR  / "{mapping}" / "insert_size_below_1000" / "{sample}.{ref_genome}.MD.IS1000.filtered.bam.depth.txt",
+        depth_plus = MAPPING_DIR  / "{mapping}" / "insert_size_below_1000" / "{sample}.{ref_genome}.MD.IS1000.filtered.bam.depth.plus_strand.txt",
+        depth_minus = MAPPING_DIR  / "{mapping}" / "insert_size_below_1000" / "{sample}.{ref_genome}.MD.IS1000.filtered.bam.depth.minus_strand.txt",
+        deeptools_cov = MAPPING_DIR / "{mapping}" / "insert_size_below_1000" / "{sample}.{ref_genome}.MD.IS1000.filtered.bam.deeptools.1bp_bins.cpm.txt"
+    threads: 4
+    resources: 
+        mem_mb=20000
+    shell:
+        """
+        module load samtools
+        samtools view -bh -e 'tlen >= -1000 && tlen <= 1000' -o {output.bam} {input}
+        samtools view -e '[NM]>1' {output.bam} | cut -f 1 > {output.tmp}
+        samtools view -e 'mapq<1' {output.bam} | cut -f 1 >> {output.tmp}
+        samtools view -e 'rlen<=75' {output.bam} | cut -f 1 >> {output.tmp}
+        sort {output.tmp} | uniq > {output.readnames_file}
+        samtools view -h {output.bam} | fgrep --invert-match -f {output.readnames_file} | samtools view -Sb -o {output.filtered_bam} - 
+        
+        samtools index -@{threads} {output.bam}
+        samtools index -@{threads} {output.filtered_bam}
+
+        samtools depth -a {output.filtered_bam} -o {output.depth}
+        
+        samtools view -h -F 16 {output.filtered_bam} -o {output.filtered_bam_plus}
+        samtools view -h -f 16 {output.filtered_bam} -o {output.filtered_bam_minus}
+        
+        samtools depth -a -o {output.depth_plus} {output.filtered_bam_plus}
+        samtools depth -a -o {output.depth_minus} {output.filtered_bam_minus}
+
+        {BAM_COVERAGE} --bam {output.filtered_bam} -o {output.deeptools_cov} --binSize 1 --normalizeUsing CPM -of bedgraph
+        """
+
+use rule insert_size as insert_size_y_repeats:
+    input: rules.mark_duplicates.output.yrepeats_bam
+
+# Check microhomologies
+rule microhomologies:
+    input: 
+        bam = rules.bwa_mito.output.md_bam, 
+        ref = REF["ChrM"]
+    output: 
+        bam = MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.MD.MICROHOMO.bam",
+        NM2_bam = MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.MD.MICROHOMO.NM2.bam",
+        NM2_SCLEN20_bam = MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.MD.MICROHOMO.NM2_SCLEN20.bam",
+        NM2_SCLEN20_XA_SA_bam = MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.MD.MICROHOMO.NM2_SCLEN20_XA_SA.bam",
+        NM2_SCLEN20_fastq_gz = MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.MD.MICROHOMO.NM2_SCLEN20.fastq.gz",
+        NM2_SCLEN20_XA_SA_fastq_gz = MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.MD.MICROHOMO.NM2_SCLEN20_XA_SA.fastq.gz",
+        bowtie2_bam = MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.MD.MICROHOMO.NM2_SCLEN20.bowtie2.bam",
+        bowtie2_NM2_SCLEN20_XA_SA_bam = MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.MD.MICROHOMO.NM2_SCLEN20_XA_SA.bowtie2.bam",
+        coverage = MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.MD.MICROHOMO.NM2_SCLEN20.bowtie2.bam.depth.txt",
+        coverage_XA_SA = MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.MD.MICROHOMO.NM2_SCLEN20_XA_SA.bowtie2.bam.depth.txt",
+        readnames_file = MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.reads_to_filter.txt"
+    threads: 4
+    shell:
+        """
+        module load samtools bowtie2
+
+        samtools view -e 'rlen<=75' {input.bam} | cut -f 1 > {output.readnames_file}
+        samtools view -h {input.bam} | fgrep --invert-match -f {output.readnames_file} | samtools view -Sb -o {output.bam}
+
+        samtools view -e "[NM]<=1" -o {output.NM2_bam} {output.bam}
+        samtools view -e "sclen>=20" -o {output.NM2_SCLEN20_bam} {output.NM2_bam}
+
+        samtools view -e '[XA] || [SA]' -o {output.NM2_SCLEN20_XA_SA_bam} {output.NM2_SCLEN20_bam}
+
+        # SE-MEI 
+        {SE_MEI} {output.NM2_SCLEN20_bam} > {output.NM2_SCLEN20_fastq_gz}
+        bowtie2 --no-mixed --threads {threads} -x {input.ref} -U {output.NM2_SCLEN20_fastq_gz} | samtools sort -@ {threads} - -o {output.bowtie2_bam} 
+        samtools index -@{threads} {output.bowtie2_bam}
+        samtools depth -a -o {output.coverage} {output.bowtie2_bam}
+
+        {SE_MEI} {output.NM2_SCLEN20_XA_SA_bam} > {output.NM2_SCLEN20_XA_SA_fastq_gz}
+        bowtie2 --no-mixed --threads {threads} -x {input.ref} -U {output.NM2_SCLEN20_XA_SA_fastq_gz} | samtools sort -@ {threads} - -o {output.bowtie2_NM2_SCLEN20_XA_SA_bam} 
+        samtools index -@{threads} {output.bowtie2_NM2_SCLEN20_XA_SA_bam} 
+        samtools depth -a -o {output.coverage_XA_SA} {output.bowtie2_NM2_SCLEN20_XA_SA_bam} 
+        """
+
+# Extract soft clip reads with SE-MEI and mapped them back to the MITO.
+rule extract_soft_clip: 
+    input:
+        bam = MAPPING_DIR / "{mapping}" / "{sample}.ChrM.MD.bam",
+        ref = REF["ChrM"]
+    output:
+        NM2_bam = MAPPING_DIR / "{mapping}" / "softclip" / "{sample}.ChrM.MD.NM2.bam",
+        NM2_SCLEN20_bam = MAPPING_DIR / "{mapping}" / "softclip" / "{sample}.ChrM.MD.NM2.SCLEN0.softclip_only.bam",
+        NM2_SCLEN20_fastq_gz = MAPPING_DIR / "{mapping}" / "softclip" / "{sample}.ChrM.MD.NM2_SCLEN20.fastq.gz",
+        softclip_overhangs_bam = MAPPING_DIR / "{mapping}" / "softclip" / "{sample}.ChrM.MD.softclip_overhangs.bam",
+        NM2_SCLEN0_softclip_overhangs_bam = MAPPING_DIR / "{mapping}" / "softclip" / "{sample}.ChrM.MD.softclip_overhangs.NM2_SCLEN0.bam"
+    params: 
+        id = lambda wc: wc.sample.split("_")[:-1],
+        bwa_opts = ""
+    threads: 4
+    shell:
+        """
+        module load samtools bwa
+        samtools view -e "[NM]<=2" -o {output.NM2_bam} {input.bam}
+        samtools view -e "sclen>=20" -o {output.NM2_SCLEN20_bam} {output.NM2_bam}
+        # SE-MEI 
+        {SE_MEI} {output.NM2_SCLEN20_bam} > {output.NM2_SCLEN20_fastq_gz}
+        bwa mem {params.bwa_opts} -t {threads} -R '@RG\\tID:{params.id}_softclip_overhangs\\tSM:{wildcards.sample}\\tPL:ILLUMINA\\tLB:PE\\tPU:TAIR10.1_ChrM' {input.ref} {output.NM2_SCLEN20_fastq_gz} | samtools sort -@ {threads} - -o {output.softclip_overhangs_bam} 
+        samtools index -@{threads} {output.softclip_overhangs_bam}
+        samtools view -e "[NM]<=2 & sclen==0" {output.softclip_overhangs_bam} -o {output.NM2_SCLEN0_softclip_overhangs_bam}
+        samtools index -@{threads} {output.NM2_SCLEN0_softclip_overhangs_bam}
+        """
+
+# Count reads in REPEAT REGION
+rule feature_counts:
+    input: 
+        bam_R1 = rules.insert_size_sup_1000.output.filtered_bam_plus,
+        bam_R2 = rules.insert_size_sup_1000.output.filtered_bam_minus
+    output:
+        featureCounts_R1 = MAPPING_DIR / "{mapping}" / "insert_size" / "{sample}.{ref_genome}.MD.IS1000.filtered.R1.featureCounts.txt",
+        featureCounts_R2 = MAPPING_DIR / "{mapping}" / "insert_size" / "{sample}.{ref_genome}.MD.IS1000.filtered.R2.featureCounts.txt"
+    shell:
+        """
+        {FEATURE_COUNTS} -O -t repeat -g repeat_region -a {REPEATS_R1_GTF} -o {output.featureCounts_R1} {input.bam_R1}
+        {FEATURE_COUNTS} -O -t repeat -g repeat_region -a {REPEATS_R2_GTF} -o {output.featureCounts_R2} {input.bam_R2}
+        """
+
+# Mapping nanopore reads on constructs
+rule minimap2_ont: 
+    input: 
+        fastq = NANOPORE_FASTQ,
+        ref = lambda wc: CONSTRUCTS[wc.construct]
+    output:
+        bam1 = NANOPORE_DIR / "minimap2" / "nanopore.{construct}.minimap2.bam",
+        bam1_cov = NANOPORE_DIR / "minimap2" / "nanopore.{construct}.minimap2.bam.coverage.txt",
+        bam2 = NANOPORE_DIR / "minimap2" / "nanopore.{construct}.minimap2_splice.bam",
+        bam2_cov = NANOPORE_DIR / "minimap2" / "nanopore.{construct}.minimap2_splice.bam.coverage.txt"
+    threads: 4
+    resources: 
+        mem_mb=24000
+    shell:
+        """
+        module load samtools minimap2
+
+        # Minimap normal mode
+        minimap2 -t {threads} -ax map-ont {input.ref} {input.fastq} | samtools sort -@{threads} --write-index -o {output.bam1} -
+        samtools coverage -o {output.bam1_cov} {output.bam1} 
+
+        # Minimap splice mode
+        minimap2 -t {threads} -ax splice {input.ref} {input.fastq} | samtools sort -@{threads} --write-index -o {output.bam2} -
+        samtools coverage -o {output.bam2_cov} {output.bam2} 
+        """
+
+# rule test:
+#     input:
+#         bam = rules.bwa_mito.output.md_bam,
+#         ref = REF["ChrM"]
+#     output:
+#         SCLEN20_bam = MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.SCLEN20.bam",
+#         SCLEN20_RLEN20_bam = MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.SCLEN20.RLEN20.bam",
+#         SCLEN20_RLEN20_fastq_gz = MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.SCLEN20.RLEN20.fastq.gz",
+#         SCLEN20_RLEN20_softclips_bowtie2_bam = MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.SCLEN20.RLEN20.softclips.bowtie2.bam",
+#         SCLEN20_RLEN20_softclips_coverage_txt = MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.SCLEN20.RLEN20.softclips.coverage.txt",
+#         readnames_file = MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.reads_to_select.txt",
+#         filtered_reads_bam = MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.SCLEN20.RLEN20.full_filtered_reads.bam",
+#         filtered_reads_coverage_txt = MAPPING_DIR / "{mapping}" / "microhomologies" / "{sample}.{ref_genome}.SCLEN20.RLEN20.full_filtered_reads.coverage.txt"
+#     threads: 4
+#     shell:
+#         """
+#         module load samtools bowtie2
+#         samtools view -h -e "sclen>=20" -o {output.SCLEN20_bam} {input.bam}
+#         samtools view -h -e "rlen>=20" -o {output.SCLEN20_RLEN20_bam} {output.SCLEN20_bam}
+#         {SE_MEI} {output.SCLEN20_RLEN20_bam} > {output.SCLEN20_RLEN20_fastq_gz}
+#         bowtie2 --no-mixed --threads {threads} -x {input.ref} -U {output.SCLEN20_RLEN20_fastq_gz} | samtools sort -@{threads} - -o {output.SCLEN20_RLEN20_softclips_bowtie2_bam}
+#         samtools index -@{threads} {output.SCLEN20_RLEN20_softclips_bowtie2_bam}
+#         samtools depth -a -o {output.SCLEN20_RLEN20_softclips_coverage_txt} {output.SCLEN20_RLEN20_softclips_bowtie2_bam}
+        
+#         # TODO add bedtools intersect to remove small repeats
+#         # samtools view {output.SCLEN20_RLEN20_softclips_bowtie2_bam} | cut -f1 | sort | uniq > {output.readnames_file}
+#         # samtools view -Sbh -N {output.readnames_file} -o {output.filtered_reads_bam} {output.SCLEN20_RLEN20_bam} 
+#         # samtools index -@{threads} {output.filtered_reads_bam}
+#         # samtools depth -a -o {output.filtered_reads_coverage_txt} {output.filtered_reads_bam}
+#         """
+
